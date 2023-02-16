@@ -3,15 +3,15 @@ use crate::{
     rule::Rule,
 };
 
-struct Derivator<R: Rule + Clone> {
+pub struct Derivator<R: Rule + Clone> {
     axiom: R,
 }
 
 impl<R: Rule + Clone> Derivator<R> {
-    fn new(axiom: R) -> Self {
+    pub fn new(axiom: R) -> Self {
         Self { axiom }
     }
-    fn derive(&self) -> GeometryData {
+    pub fn derive(&self) -> GeometryData {
         let mut rules_vec = Vec::<Box<dyn Rule>>::with_capacity(50);
 
         let mut geometry_vec = Vec::<GeometryData>::with_capacity(10);
