@@ -5,11 +5,10 @@ use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
-use bevy::render::RenderPlugin;
 use geometry::derivator::Derivator;
-use geometry::rule::{Rule, RuleEvaluator, Rulea};
+use geometry::rule::{Rule, RuleEvaluator};
 use geometry::scope::{Direction, Face, Scope};
-use geometry::symbol::{Symbol, SymbolDat, SymbolData};
+use geometry::symbol::{Symbol, SymbolData};
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
@@ -28,7 +27,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let symbol_data = SymbolDat {
+    let symbol_data = SymbolData {
         scope: Scope {
             ..Default::default()
         },
@@ -76,133 +75,70 @@ fn setup(
 
 #[derive(Default, Clone)]
 struct AxiomSymbol {
-    data: SymbolDat,
+    data: SymbolData,
 }
 #[derive(Default, Clone)]
 struct HouseSymbol {
-    data: SymbolDat,
+    data: SymbolData,
 }
 #[derive(Default, Clone)]
 struct RoofSymbol {
-    data: SymbolDat,
+    data: SymbolData,
 }
 
 impl Symbol for AxiomSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolDat {
+    fn get_data(&self) -> &geometry::symbol::SymbolData {
         &self.data
     }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolDat {
+    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
         &mut self.data
     }
 }
 impl Symbol for HouseSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolDat {
+    fn get_data(&self) -> &geometry::symbol::SymbolData {
         &self.data
     }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolDat {
+    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
         &mut self.data
     }
 }
 impl Symbol for RoofSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolDat {
+    fn get_data(&self) -> &geometry::symbol::SymbolData {
         &self.data
     }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolDat {
+    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
         &mut self.data
     }
 }
 
-impl Rule for AxiomSymbol {
-    fn evaluate(&mut self) -> Option<Vec<Box<dyn Rule>>> {
-        let mut lot = Scope::default();
-        lot.set_size(12f32, 0f32, 8f32);
-        let scopes = lot.repeat(Direction::X, 4.0);
-
-        let mut house_symbols = Vec::<Box<dyn Rule>>::with_capacity(scopes.len());
-        for x in 0..scopes.len() {
-            let symbol_data = SymbolDat {
-                scope: scopes[x].clone(),
-                is_terminal: true,
-            };
-            let house = HouseSymbol { data: symbol_data };
-
-            house_symbols.insert(x, Box::new(house));
-        }
-        println!("AxiomRule applied");
-        Some(house_symbols)
-    }
-
-    fn is_terminal(&self) -> bool {
-        self.get_data().is_terminal
-    }
-    fn scope(&self) -> Scope {
-        self.get_data().scope.clone()
-    }
-}
-impl Rule for HouseSymbol {
-    fn evaluate(&mut self) -> Option<Vec<Box<dyn Rule>>> {
-        self.get_data_mut().scope.extrude(8f32);
-        let symbol_data = SymbolDat {
-            scope: self.get_data().scope.get_face(Face::Top),
-            is_terminal: true,
-        };
-        let roof = RoofSymbol { data: symbol_data };
-
-        println!("HouseRule applied");
-        Some(vec![Box::new(roof)])
-    }
-
-    fn is_terminal(&self) -> bool {
-        self.get_data().is_terminal
-    }
-    fn scope(&self) -> Scope {
-        self.get_data().scope.clone()
-    }
-}
-
-impl Rule for RoofSymbol {
-    fn evaluate(&mut self) -> Option<Vec<Box<dyn Rule>>> {
-        self.get_data_mut().scope.extrude(5f32);
-        println!("RoofRule applied");
-
-        None
-    }
-
-    fn is_terminal(&self) -> bool {
-        self.get_data().is_terminal
-    }
-    fn scope(&self) -> Scope {
-        self.get_data().scope.clone()
-    }
-}
 struct Axiom;
 struct HouseSimple;
 struct HouseComplex;
 struct RoofSimple;
 impl RuleEvaluator for AxiomSymbol {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rulea::<Axiom>::evaluate(self)
+        Rule::<Axiom>::evaluate(self)
     }
 
-    fn get_symbol_data(&self) -> &SymbolDat {
+    fn get_symbol_data(&self) -> &SymbolData {
         self.get_data()
     }
 }
 impl RuleEvaluator for HouseSymbol {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rulea::<HouseSimple>::evaluate(self)
+        Rule::<HouseSimple>::evaluate(self)
     }
 
-    fn get_symbol_data(&self) -> &SymbolDat {
+    fn get_symbol_data(&self) -> &SymbolData {
         self.get_data()
     }
 }
 impl RuleEvaluator for RoofSymbol {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rulea::<RoofSimple>::evaluate(self)
+        Rule::<RoofSimple>::evaluate(self)
     }
 
-    fn get_symbol_data(&self) -> &SymbolDat {
+    fn get_symbol_data(&self) -> &SymbolData {
         self.get_data()
     }
 }
@@ -211,7 +147,7 @@ impl RuleEvaluator for RoofSymbol {
 //         Rulea::<HouseSimple>::evaluate(self)
 //     }
 // }
-impl Rulea<Axiom> for AxiomSymbol{
+impl Rule<Axiom> for AxiomSymbol{
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         let mut lot = Scope::default();
         lot.set_size(12f32, 0f32, 8f32);
@@ -219,7 +155,7 @@ impl Rulea<Axiom> for AxiomSymbol{
 
         let mut house_symbols = Vec::<Box<dyn RuleEvaluator>>::with_capacity(scopes.len());
         for x in 0..scopes.len() {
-            let symbol_data = SymbolDat {
+            let symbol_data = SymbolData {
                 scope: scopes[x].clone(),
                 is_terminal: true,
             };
@@ -243,10 +179,10 @@ impl Rulea<Axiom> for AxiomSymbol{
         1.0
     }
 }
-impl Rulea<HouseSimple> for HouseSymbol {
+impl Rule<HouseSimple> for HouseSymbol {
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         self.get_data_mut().scope.extrude(8f32);
-        let symbol_data = SymbolDat {
+        let symbol_data = SymbolData {
             scope: self.get_data().scope.get_face(Face::Top),
             is_terminal: true,
         };
@@ -267,7 +203,7 @@ impl Rulea<HouseSimple> for HouseSymbol {
         1.0
     }
 }
-impl Rulea<RoofSimple> for RoofSymbol {
+impl Rule<RoofSimple> for RoofSymbol {
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         self.get_data_mut().scope.extrude(5f32);
         println!("RoofRule applied");

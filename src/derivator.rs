@@ -1,6 +1,6 @@
 use crate::{
     geometry::{Geometry, GeometryData},
-    rule::{Rule, RuleEvaluator},
+    rule::RuleEvaluator,
 };
 
 pub struct Derivator<R: RuleEvaluator + Clone> {

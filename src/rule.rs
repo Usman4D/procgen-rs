@@ -1,14 +1,6 @@
-use crate::{
-    scope::Scope,
-    symbol::{SymbolDat, SymbolData},
-};
+use crate::{scope::Scope, symbol::SymbolData};
 
-pub trait Rule {
-    fn evaluate(&mut self) -> Option<Vec<Box<dyn Rule>>>;
-    fn is_terminal(&self) -> bool;
-    fn scope(&self) -> Scope;
-}
-pub trait Rulea<T> {
+pub trait Rule<T> {
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>>;
     fn is_terminal(&self) -> bool;
     fn scope(&self) -> Scope;
@@ -16,5 +8,5 @@ pub trait Rulea<T> {
 }
 pub trait RuleEvaluator {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>>;
-    fn get_symbol_data(&self) -> &SymbolDat;
+    fn get_symbol_data(&self) -> &SymbolData;
 }
