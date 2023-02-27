@@ -30,9 +30,17 @@ impl Scope {
         return self;
     }
     pub fn extrude(&mut self, sy: f32) -> &Self {
-        self.sy = sy;
+        self.sy += sy;
 
         self
+    }
+    pub fn extruded_scope(&self, sy: f32) -> Self {
+        let mut new_scope = self.clone();
+
+        new_scope.sy = sy;
+        new_scope.y += self.sy;
+
+        new_scope
     }
     pub fn get_face(&self, face: Face) -> Self {
         match face {
@@ -105,20 +113,20 @@ impl Scope {
             }
         }
     }
-    fn split(&self, dir: Direction, spec: String, vals: &[&f32]) -> Result<Vec<Self>, Self>{
+    pub fn split(&self, dir: Direction, spec: &str, vals: &[f32]) -> Result<Vec<Self>, Self>{
         if spec.chars().count() != vals.len(){
             return Err(Scope::ZERO());
         }
-        let mut total_absolute : f32 = 0.0;
-        let mut total_relative : f32 = 0.0;
+        let mut total_absolute: f32 = 0.0;
+        let mut total_relative: f32 = 0.0;
 
         let mut scopes = Vec::<Self>::with_capacity(vals.len());
         let count = vals.len();
 
         for i in 0..count{
             match spec.chars().nth(i).unwrap() {
-                'a' => {total_absolute += *vals[i]},
-                'r' => {total_relative += *vals[i]},
+                'a' => {total_absolute += vals[i]},
+                'r' => {total_relative += vals[i]},
                 _ => {},
             };
         }
@@ -130,7 +138,7 @@ impl Scope {
                 let const_relative_size = (self.sx - total_absolute) / total_relative;
                 for i in 0..count{
                     let size = match spec.chars().nth(i).unwrap() {
-                        'a' => *vals[i],
+                        'a' => vals[i],
                         'r' => vals[i] * const_relative_size,
                         _ => 0.0,
                     };
@@ -142,7 +150,7 @@ impl Scope {
                         self.sy,
                         self.sz,
                         );
-                    last_size = size;
+                    last_size += size;
 
                     scopes.push(new_scope);
                 }
@@ -151,7 +159,7 @@ impl Scope {
                 let const_relative_size = (self.sy - total_absolute) / total_relative;
                 for i in 0..count{
                     let size = match spec.chars().nth(i).unwrap() {
-                        'a' => *vals[i],
+                        'a' => vals[i],
                         'r' => vals[i] * const_relative_size,
                         _ => 0.0,
                     };
@@ -163,16 +171,16 @@ impl Scope {
                         size,
                         self.sz,
                         );
-                    last_size = size;
+                    last_size += size;
 
                     scopes.push(new_scope);
                 }
             },
             Direction::Z => {
-                let const_relative_size = (self.sx - total_absolute) / total_relative;
+                let const_relative_size = (self.sz - total_absolute) / total_relative;
                 for i in 0..count{
                     let size = match spec.chars().nth(i).unwrap() {
-                        'a' => *vals[i],
+                        'a' => vals[i],
                         'r' => vals[i] * const_relative_size,
                         _ => 0.0,
                     };
@@ -184,7 +192,7 @@ impl Scope {
                         self.sy,
                         size,
                         );
-                    last_size = size;
+                    last_size += size;
 
                     scopes.push(new_scope);
                 }
@@ -192,6 +200,9 @@ impl Scope {
         }
 
         Ok(scopes)
+    }
+    pub fn inset(&self, normal: Direction, amount: f32) -> Result<Vec<Self>, Self>{
+        Err(Scope::ZERO())
     }
 }
 pub enum Face {
