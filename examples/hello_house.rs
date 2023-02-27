@@ -85,6 +85,10 @@ struct HouseSymbol {
 struct RoofSymbol {
     data: SymbolData,
 }
+#[derive(Default, Clone)]
+struct FacadeSymbol {
+    data: SymbolData,
+}
 
 impl Symbol for AxiomSymbol {
     fn get_data(&self) -> &geometry::symbol::SymbolData {
@@ -110,11 +114,21 @@ impl Symbol for RoofSymbol {
         &mut self.data
     }
 }
+impl Symbol for FacadeSymbol {
+    fn get_data(&self) -> &geometry::symbol::SymbolData {
+        &self.data
+    }
+    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
+        &mut self.data
+    }
+}
 
 struct Axiom;
-struct HouseSimple;
-struct HouseComplex;
+struct HouseSingleRoom;
+struct HouseDualRoom;
+struct HouseTriRoom;
 struct RoofSimple;
+struct Facade;
 impl RuleEvaluator for AxiomSymbol {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         Rule::<Axiom>::evaluate(self)
@@ -126,7 +140,7 @@ impl RuleEvaluator for AxiomSymbol {
 }
 impl RuleEvaluator for HouseSymbol {
     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rule::<HouseSimple>::evaluate(self)
+        Rule::<HouseTriRoom>::evaluate(self)
     }
 
     fn get_symbol_data(&self) -> &SymbolData {
@@ -142,6 +156,15 @@ impl RuleEvaluator for RoofSymbol {
         self.get_data()
     }
 }
+impl RuleEvaluator for FacadeSymbol {
+    fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
+        Rule::<Facade>::evaluate(self)
+    }
+
+    fn get_symbol_data(&self) -> &SymbolData {
+        self.get_data()
+    }
+}
 // impl RuleEvaluator for HouseSymbol{
 //     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn Rule>>> {
 //         Rulea::<HouseSimple>::evaluate(self)
@@ -151,18 +174,25 @@ impl Rule<Axiom> for AxiomSymbol{
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         let mut lot = Scope::default();
         lot.set_size(12f32, 0f32, 8f32);
-        let scopes = lot.repeat(Direction::X, 4.0);
+        // let scopes = lot.repeat(Direction::X, 4.0);
 
-        let mut house_symbols = Vec::<Box<dyn RuleEvaluator>>::with_capacity(scopes.len());
-        for x in 0..scopes.len() {
-            let symbol_data = SymbolData {
-                scope: scopes[x].clone(),
-                is_terminal: true,
-            };
-            let house = HouseSymbol { data: symbol_data };
+        let mut house_symbols = Vec::<Box<dyn RuleEvaluator>>::with_capacity(1);
+        // for x in 0..scopes.len() {
+        //     let symbol_data = SymbolData {
+        //         scope: scopes[x].clone(),
+        //         is_terminal: true,
+        //     };
+        //     let house = HouseSymbol { data: symbol_data };
+        //
+        //     house_symbols.insert(x, Box::new(house));
+        // }
+        let symbol_data = SymbolData {
+            scope: lot.clone(),
+            is_terminal: false,
+        };
+        let house = HouseSymbol { data: symbol_data };
 
-            house_symbols.insert(x, Box::new(house));
-        }
+        house_symbols.insert(0, Box::new(house));
         println!("AxiomRule applied");
         Some(house_symbols)
     }
@@ -179,17 +209,23 @@ impl Rule<Axiom> for AxiomSymbol{
         1.0
     }
 }
-impl Rule<HouseSimple> for HouseSymbol {
+impl Rule<HouseSingleRoom> for HouseSymbol {
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        self.get_data_mut().scope.extrude(8f32);
+        self.get_data_mut().scope.extrude(6f32);
         let symbol_data = SymbolData {
             scope: self.get_data().scope.get_face(Face::Top),
-            is_terminal: true,
+            is_terminal: false,
         };
         let roof = RoofSymbol { data: symbol_data };
 
+        let facade_symbol_data = SymbolData {
+            scope: self.get_data().scope.clone(),
+            is_terminal: true,
+        };
+        let facade = FacadeSymbol{data:facade_symbol_data};
+
         println!("HouseRule applied");
-        Some(vec![Box::new(roof)])
+        Some(vec![Box::new(roof),Box::new(facade)])
     }
 
     fn is_terminal(&self) -> bool {
@@ -203,10 +239,198 @@ impl Rule<HouseSimple> for HouseSymbol {
         1.0
     }
 }
+impl Rule<HouseDualRoom> for HouseSymbol{
+    fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
+        let scope_split_result = self.get_data().scope.clone().extrude(6.0).split(Direction::X, "rr", &[2.0,1.0]);
+        let splits = match scope_split_result{
+            Ok(val) => val,
+            Err(val) => {
+                warn!("split operation failed");
+                vec![val]
+            },
+        };
+        let mut new_scopes = Vec::<Box<dyn RuleEvaluator>>::with_capacity(splits.len());
+        let mut index = 0;
+        for mut scope in splits{
+            let mut top_face = scope.get_face(Face::Top);
+            if index == 0{
+                top_face.extrude(1.0);
+            } else{
+                top_face.extrude(0.0);
+            }
+            let symbol_data = SymbolData {
+                scope: top_face.get_face(Face::Top),
+                is_terminal: false,
+            };
+            let roof = RoofSymbol { data: symbol_data };
+
+            let facade_symbol_data = SymbolData {
+                scope: scope.clone(),
+                is_terminal: true,
+            };
+            let facade = FacadeSymbol{data:facade_symbol_data};
+
+            let facade_symbol_data_2 = SymbolData {
+                scope: top_face.clone(),
+                is_terminal: true,
+            };
+            let facade_2 = FacadeSymbol{data:facade_symbol_data_2};
+
+            new_scopes.push(Box::new(roof));
+            new_scopes.push(Box::new(facade));
+            new_scopes.push(Box::new(facade_2));
+
+            index+=1;
+        }
+
+        println!("HouseRule applied");
+        Some(new_scopes)
+    }
+
+    fn is_terminal(&self) -> bool {
+        todo!()
+    }
+
+    fn scope(&self) -> Scope {
+        todo!()
+    }
+
+    fn probability() -> f32 {
+        todo!()
+    }
+}
+impl Rule<HouseTriRoom> for HouseSymbol{
+    fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
+        let scope_split_result = self.get_data().scope.clone().extrude(6.0).split(Direction::X, "rrr", &[1.1,1.0,1.1]);
+        let splits = match scope_split_result{
+            Ok(val) => val,
+            Err(val) => {
+                warn!("split operation failed");
+                vec![val]
+            },
+        };
+        let mut new_scopes = Vec::<Box<dyn RuleEvaluator>>::with_capacity(splits.len());
+        let mut index = 0;
+        for mut scope in splits{
+            let mut top_face = scope.get_face(Face::Top);
+            if index == 1{
+                top_face.extrude(3.0);
+            } else{
+                top_face.extrude(0.0);
+            }
+            let symbol_data = SymbolData {
+                scope: top_face.get_face(Face::Top),
+                is_terminal: false,
+            };
+            let roof = RoofSymbol { data: symbol_data };
+
+            let facade_symbol_data = SymbolData {
+                scope: scope.clone(),
+                is_terminal: true,
+            };
+            let facade = FacadeSymbol{data:facade_symbol_data};
+
+            let facade_symbol_data_2 = SymbolData {
+                scope: top_face.clone(),
+                is_terminal: true,
+            };
+            let facade_2 = FacadeSymbol{data:facade_symbol_data_2};
+
+            new_scopes.push(Box::new(roof));
+            new_scopes.push(Box::new(facade));
+            new_scopes.push(Box::new(facade_2));
+
+            index+=1;
+        }
+
+        println!("HouseRule applied");
+        Some(new_scopes)
+    }
+
+    fn is_terminal(&self) -> bool {
+        todo!()
+    }
+
+    fn scope(&self) -> Scope {
+        todo!()
+    }
+
+    fn probability() -> f32 {
+        todo!()
+    }
+}
 impl Rule<RoofSimple> for RoofSymbol {
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        self.get_data_mut().scope.extrude(5f32);
+        self.get_data_mut().scope.extrude(1.0f32);
+
+        let scope_split_result = self.get_data().scope.split(Direction::X, "ara", &[0.5,1.0,0.5]);
+        let splits = match scope_split_result{
+            Ok(val) => val,
+            Err(val) => {
+                warn!("split operation failed");
+                vec![val]
+            },
+        };
+
+        let mut facades = Vec::<Box<dyn RuleEvaluator>>::with_capacity(3);
+        for s in 0..3{
+            if s == 1{
+                let scope_split_result = splits[s].split(Direction::Z, "ara", &[0.5,1.0,0.5]);
+                let mut splits = match scope_split_result{
+                    Ok(val) => val,
+                    Err(val) => {
+                        warn!("split operation failed");
+                        vec![val]
+                    },
+                };
+
+                for y in 0..3{
+                    if y ==1{
+                        splits[y].extrude(-0.5);
+                    }
+                    let facade_symbol_data = SymbolData {
+                        scope: splits[y].clone(),
+                        is_terminal: true,
+                    };
+                    let mut facade = FacadeSymbol{data:facade_symbol_data};
+
+
+                    facades.push(Box::new(facade));
+
+                }
+            }
+            else{
+                let facade_symbol_data = SymbolData {
+                    scope: splits[s].clone(),
+                    is_terminal: true,
+                };
+                let mut facade = FacadeSymbol{data:facade_symbol_data};
+
+                facades.push(Box::new(facade));
+
+            }
+
+
+        }
+
         println!("RoofRule applied");
+        Some(facades)
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.get_data().is_terminal
+    }
+    fn scope(&self) -> Scope {
+        self.get_data().scope.clone()
+    }
+
+    fn probability() -> f32 {
+        1.0
+    }
+}
+impl Rule<Facade> for FacadeSymbol {
+    fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
+        println!("FacadeRule applied");
 
         None
     }
