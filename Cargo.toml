@@ -10,6 +10,7 @@ edition = "2021"
 name = "geometry"
 
 [dependencies]
+macros = { version = "0.1.0", path = "macros" }
 
 [dev-dependencies]
 winit = "0.27"
@@ -21,6 +22,7 @@ bytemuck = { version = "1.12", features = [ "derive" ] }
 anyhow = "1.0"
 cgmath = "0.18"
 bevy = "0.9.1"
+rand = "0.8.5"
 
 [dev-dependencies.image]
 version = "0.24"

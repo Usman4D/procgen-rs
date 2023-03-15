@@ -4,6 +4,7 @@ pub trait Symbol {
     // type enabled;
     // type parent;
     // type child;
+    fn new(symbol_data: SymbolData) -> Self;
     fn get_data(&self) -> &SymbolData;
     fn get_data_mut(&mut self) -> &mut SymbolData;
 }

@@ -1,31 +1,41 @@
 extern crate geometry;
+extern crate macros;
 mod freecamera;
 
-use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
+use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
-use geometry::derivator::Derivator;
-use geometry::rule::{Rule, RuleEvaluator};
-use geometry::scope::{Direction, Face, Scope};
+use geometry::derivator::Derivator; use geometry::rule::{Rule, RuleEvaluator}; use geometry::scope::{Direction, Face, Scope};
 use geometry::symbol::{Symbol, SymbolData};
+use macros::Symbol;
+use rand::prelude::*;
+use rand::distributions::WeightedIndex;
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(WgpuSettings {
             features: WgpuFeatures::POLYGON_MODE_LINE,
+            power_preference: bevy::render::settings::PowerPreference::LowPower,
             ..default()
         })
+        .insert_resource(State{..Default::default()})
         .add_plugins(DefaultPlugins)
         .add_plugin(freecamera::FreeCameraPlugin)
         .add_plugin(WireframePlugin)
         .add_startup_system(setup)
+        .add_system(update)
         .run();
+}
+#[derive(Default,Resource)]
+struct State{
+    pub mesh: Option<Handle<Mesh>>,
 }
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut state: ResMut<State>,
 ) {
     let symbol_data = SymbolData {
         scope: Scope {
@@ -33,11 +43,12 @@ fn setup(
         },
         is_terminal: false,
     };
-    let axiom = AxiomSymbol { data: symbol_data };
+    let axiom = AxiomSymbol(symbol_data);
     let derivator = Derivator::new(axiom);
     let geometry_data = derivator.derive();
 
     dbg!(&geometry_data);
+    
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
 
     // Positions of the vertices
@@ -55,9 +66,13 @@ fn setup(
     mesh.duplicate_vertices();
     mesh.compute_flat_normals();
 
+    let handle = meshes.add(mesh);
+
+    state.mesh = Some(handle);
+
     commands
         .spawn(PbrBundle {
-            mesh: meshes.add(mesh),
+            mesh: state.mesh.as_ref().unwrap().clone(),
             material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
             ..default()
         })
@@ -72,56 +87,63 @@ fn setup(
         ..default()
     });
 }
+fn update(
+    keys: Res<Input<KeyCode>>,
+    mut state: ResMut<State>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    ){
+    if keys.just_pressed(KeyCode::G){
 
-#[derive(Default, Clone)]
-struct AxiomSymbol {
-    data: SymbolData,
-}
-#[derive(Default, Clone)]
-struct HouseSymbol {
-    data: SymbolData,
-}
-#[derive(Default, Clone)]
-struct RoofSymbol {
-    data: SymbolData,
-}
-#[derive(Default, Clone)]
-struct FacadeSymbol {
-    data: SymbolData,
+        let symbol_data = SymbolData {
+            scope: Scope {
+                ..Default::default()
+            },
+            is_terminal: false,
+        };
+        let axiom = AxiomSymbol(symbol_data);
+        let derivator = Derivator::new(axiom);
+        let geometry_data = derivator.derive();
+
+        dbg!(&geometry_data);
+
+        let mesh = meshes.get_mut(state.mesh.as_mut().unwrap()).unwrap();
+        // let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+
+        // Positions of the vertices
+        // See https://bevy-cheatbook.github.io/features/coords.html
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, geometry_data.verticies);
+
+        // In this example, normals and UVs don't matter,
+        // so we just use the same value for all of them
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0., 1., 0.]; 3]);
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0., 0.]; 3]);
+
+        // A triangle using vertices 0, 2, and 1.
+        // Note: order matters. [0, 1, 2] will be flipped upside down, and you won't see it from behind!
+        mesh.set_indices(Some(mesh::Indices::U32(geometry_data.indicies)));
+        mesh.duplicate_vertices();
+        mesh.compute_flat_normals();
+    }
 }
 
-impl Symbol for AxiomSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolData {
-        &self.data
-    }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
-        &mut self.data
-    }
-}
-impl Symbol for HouseSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolData {
-        &self.data
-    }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
-        &mut self.data
-    }
-}
-impl Symbol for RoofSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolData {
-        &self.data
-    }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
-        &mut self.data
-    }
-}
-impl Symbol for FacadeSymbol {
-    fn get_data(&self) -> &geometry::symbol::SymbolData {
-        &self.data
-    }
-    fn get_data_mut(&mut self) -> &mut geometry::symbol::SymbolData {
-        &mut self.data
-    }
-}
+#[derive(Clone, macros::Symbol, macros::RuleEvaluator)]
+#[rules(Axiom)]
+struct AxiomSymbol(SymbolData);
+
+#[derive(Clone, macros::Symbol, macros::RuleEvaluator)]
+#[rules(HouseSingleRoom, HouseDualRoom, HouseTriRoom)]
+struct HouseSymbol(SymbolData);
+
+#[derive(Clone, macros::Symbol, macros::RuleEvaluator)]
+#[rules(RoofSimple)]
+struct RoofSymbol(SymbolData);
+
+#[derive(Clone, macros::Symbol, macros::RuleEvaluator)]
+#[rules(Facade)]
+struct FacadeSymbol(SymbolData);
+
+#[derive(Symbol)]
+struct LotSymbol(SymbolData);
 
 struct Axiom;
 struct HouseSingleRoom;
@@ -129,47 +151,25 @@ struct HouseDualRoom;
 struct HouseTriRoom;
 struct RoofSimple;
 struct Facade;
-impl RuleEvaluator for AxiomSymbol {
-    fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rule::<Axiom>::evaluate(self)
+struct Lot;
+
+impl Rule<Lot> for LotSymbol{
+    fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
+        todo!()
     }
 
-    fn get_symbol_data(&self) -> &SymbolData {
-        self.get_data()
-    }
-}
-impl RuleEvaluator for HouseSymbol {
-    fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rule::<HouseTriRoom>::evaluate(self)
+    fn is_terminal(&self) -> bool {
+        todo!()
     }
 
-    fn get_symbol_data(&self) -> &SymbolData {
-        self.get_data()
-    }
-}
-impl RuleEvaluator for RoofSymbol {
-    fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rule::<RoofSimple>::evaluate(self)
+    fn scope(&self) -> Scope {
+        todo!()
     }
 
-    fn get_symbol_data(&self) -> &SymbolData {
-        self.get_data()
+    fn probability() -> f32 {
+        todo!()
     }
 }
-impl RuleEvaluator for FacadeSymbol {
-    fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
-        Rule::<Facade>::evaluate(self)
-    }
-
-    fn get_symbol_data(&self) -> &SymbolData {
-        self.get_data()
-    }
-}
-// impl RuleEvaluator for HouseSymbol{
-//     fn evaluate_rules(&mut self) -> Option<Vec<Box<dyn Rule>>> {
-//         Rulea::<HouseSimple>::evaluate(self)
-//     }
-// }
 impl Rule<Axiom> for AxiomSymbol{
     fn evaluate(&mut self) -> Option<Vec<Box<dyn RuleEvaluator>>> {
         let mut lot = Scope::default();
@@ -190,7 +190,7 @@ impl Rule<Axiom> for AxiomSymbol{
             scope: lot.clone(),
             is_terminal: false,
         };
-        let house = HouseSymbol { data: symbol_data };
+        let house = HouseSymbol(symbol_data);
 
         house_symbols.insert(0, Box::new(house));
         println!("AxiomRule applied");
@@ -216,13 +216,13 @@ impl Rule<HouseSingleRoom> for HouseSymbol {
             scope: self.get_data().scope.get_face(Face::Top),
             is_terminal: false,
         };
-        let roof = RoofSymbol { data: symbol_data };
+        let roof = RoofSymbol(symbol_data);
 
         let facade_symbol_data = SymbolData {
             scope: self.get_data().scope.clone(),
             is_terminal: true,
         };
-        let facade = FacadeSymbol{data:facade_symbol_data};
+        let facade = FacadeSymbol(facade_symbol_data);
 
         println!("HouseRule applied");
         Some(vec![Box::new(roof),Box::new(facade)])
@@ -262,19 +262,19 @@ impl Rule<HouseDualRoom> for HouseSymbol{
                 scope: top_face.get_face(Face::Top),
                 is_terminal: false,
             };
-            let roof = RoofSymbol { data: symbol_data };
+            let roof = RoofSymbol(symbol_data);
 
             let facade_symbol_data = SymbolData {
                 scope: scope.clone(),
                 is_terminal: true,
             };
-            let facade = FacadeSymbol{data:facade_symbol_data};
+            let facade = FacadeSymbol(facade_symbol_data);
 
             let facade_symbol_data_2 = SymbolData {
                 scope: top_face.clone(),
                 is_terminal: true,
             };
-            let facade_2 = FacadeSymbol{data:facade_symbol_data_2};
+            let facade_2 = FacadeSymbol(facade_symbol_data_2);
 
             new_scopes.push(Box::new(roof));
             new_scopes.push(Box::new(facade));
@@ -296,7 +296,7 @@ impl Rule<HouseDualRoom> for HouseSymbol{
     }
 
     fn probability() -> f32 {
-        todo!()
+        1.0
     }
 }
 impl Rule<HouseTriRoom> for HouseSymbol{
@@ -322,19 +322,19 @@ impl Rule<HouseTriRoom> for HouseSymbol{
                 scope: top_face.get_face(Face::Top),
                 is_terminal: false,
             };
-            let roof = RoofSymbol { data: symbol_data };
+            let roof = RoofSymbol(symbol_data);
 
             let facade_symbol_data = SymbolData {
                 scope: scope.clone(),
                 is_terminal: true,
             };
-            let facade = FacadeSymbol{data:facade_symbol_data};
+            let facade = FacadeSymbol(facade_symbol_data);
 
             let facade_symbol_data_2 = SymbolData {
                 scope: top_face.clone(),
                 is_terminal: true,
             };
-            let facade_2 = FacadeSymbol{data:facade_symbol_data_2};
+            let facade_2 = FacadeSymbol(facade_symbol_data_2);
 
             new_scopes.push(Box::new(roof));
             new_scopes.push(Box::new(facade));
@@ -356,7 +356,7 @@ impl Rule<HouseTriRoom> for HouseSymbol{
     }
 
     fn probability() -> f32 {
-        todo!()
+        1.0
     }
 }
 impl Rule<RoofSimple> for RoofSymbol {
@@ -392,7 +392,7 @@ impl Rule<RoofSimple> for RoofSymbol {
                         scope: splits[y].clone(),
                         is_terminal: true,
                     };
-                    let mut facade = FacadeSymbol{data:facade_symbol_data};
+                    let mut facade = FacadeSymbol(facade_symbol_data);
 
 
                     facades.push(Box::new(facade));
@@ -404,7 +404,7 @@ impl Rule<RoofSimple> for RoofSymbol {
                     scope: splits[s].clone(),
                     is_terminal: true,
                 };
-                let mut facade = FacadeSymbol{data:facade_symbol_data};
+                let mut facade = FacadeSymbol(facade_symbol_data);
 
                 facades.push(Box::new(facade));
 
