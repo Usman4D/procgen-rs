@@ -1,1 +1,1 @@
-geometry-rs
+This library implements ShapeGrammar that allows you to build geometry. Any geometry that ShapeGrammar allows can be constructed using Axioms, Symbols, and Rules implemented in this library. Procedural macros make the code shorter and ergonomic.
